@@ -1,176 +1,136 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from './api/axios';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, PieChart, Activity, LogOut, RefreshCw, Clock } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { TrendingUp, TrendingDown, DollarSign, Activity, LogOut, RefreshCw, Clock, Cpu, Zap, ShieldCheck } from 'lucide-react';
 
 const Dashboard = ({ onLogout }) => {
     const [summary, setSummary] = useState(null);
     const [history, setHistory] = useState([]);
     const [trades, setTrades] = useState([]);
+    const [monitoring, setMonitoring] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(new Date());
-    const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(30);
 
-    // Función de carga de datos optimizada
     const fetchData = useCallback(async (isManual = false) => {
         if (isManual) setRefreshing(true);
         try {
-            const [s, h, t] = await Promise.all([
+            const [s, h, t, m] = await Promise.all([
                 api.get('/stats/summary'),
                 api.get('/stats/history'),
-                api.get('/stats/trades')
+                api.get('/stats/trades'),
+                api.get('/stats/monitoring')
             ]);
-            setSummary(s.data);
-            setHistory(h.data);
-            setTrades(t.data);
+            setSummary(s.data); setHistory(h.data); setTrades(t.data); setMonitoring(m.data);
             setLastUpdate(new Date());
-        } catch (err) {
-            console.error("Error cargando datos", err);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
+        } catch (err) { console.error(err); } 
+        finally { setLoading(false); setRefreshing(false); }
     }, []);
 
-    // Efecto para Refresco Automático
     useEffect(() => {
-        fetchData(); // Carga inicial
-        
-        const interval = setInterval(() => {
-            fetchData();
-        }, autoRefreshSeconds * 1000);
-
+        fetchData();
+        const interval = setInterval(() => fetchData(), 15000);
         return () => clearInterval(interval);
-    }, [fetchData, autoRefreshSeconds]);
+    }, [fetchData]);
 
-    if (loading) {
-        return (
-            <div className="flex h-screen w-full items-center justify-center bg-slate-950">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-                    <p className="text-slate-400 font-medium animate-pulse">Sincronizando con MT5...</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return <LoadingScreen />;
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden">
-            {/* Header / Navbar Profesional */}
-            <nav className="bg-white/80 backdrop-blur-md border-b px-4 py-3 sticky top-0 z-50 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200">
-                        <Activity size={20}/>
+        <div className="min-h-screen bg-[#0a0f1c] text-slate-100 font-sans selection:bg-blue-500/30">
+            {/* Header Pro */}
+            <nav className="bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                    <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-2xl shadow-lg shadow-blue-500/20">
+                        <Cpu size={22} className="text-white animate-pulse"/>
                     </div>
                     <div>
-                        <h1 className="font-bold text-base leading-tight">TraderBot <span className="text-blue-600">v4.0</span></h1>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                            <Clock size={10}/> Actualizado: {lastUpdate.toLocaleTimeString()}
+                        <h1 className="font-black text-lg tracking-tight uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">AI Sentinel <span className="text-blue-500">v5.0</span></h1>
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
+                            Live Feed: {lastUpdate.toLocaleTimeString()}
                         </div>
                     </div>
                 </div>
-                
-                <div className="flex items-center gap-3">
-                    {/* Botón Refresco Manual */}
-                    <button 
-                        onClick={() => fetchData(true)}
-                        className={`p-2 rounded-xl border transition-all active:scale-90 ${refreshing ? 'bg-blue-50 text-blue-600' : 'bg-white text-slate-500'}`}
-                    >
+                <div className="flex gap-3">
+                    <button onClick={() => fetchData(true)} className={`p-2.5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all ${refreshing ? 'text-blue-400' : 'text-slate-400'}`}>
                         <RefreshCw size={20} className={refreshing ? "animate-spin" : ""} />
                     </button>
-                    <button onClick={onLogout} className="p-2 rounded-xl border bg-white text-slate-400 hover:text-red-500 transition-colors">
+                    <button onClick={onLogout} className="p-2.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
                         <LogOut size={20}/>
                     </button>
                 </div>
             </nav>
 
-            <main className="max-w-7xl mx-auto px-4 mt-6 space-y-6 animate-in fade-in duration-700">
+            <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
                 
-                {/* Selector de Auto-refresco (Mobile friendly) */}
-                <div className="flex items-center justify-between bg-white p-3 rounded-2xl border shadow-sm">
-                    <span className="text-xs font-bold text-slate-500 uppercase px-2">Auto-Refresco</span>
-                    <select 
-                        value={autoRefreshSeconds} 
-                        onChange={(e) => setAutoRefreshSeconds(Number(e.target.value))}
-                        className="bg-slate-100 text-xs font-bold py-1 px-3 rounded-lg outline-none border-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value={15}>15s</option>
-                        <option value={30}>30s</option>
-                        <option value={60}>1m</option>
-                        <option value={300}>5m</option>
-                    </select>
+                {/* Métricas Principales */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KPI icon={<DollarSign/>} label="Balance" val={`$${summary.current_balance.toLocaleString()}`} color="blue" />
+                    <KPI icon={<TrendingUp/>} label="Net Profit" val={`$${summary.total_profit.toLocaleString()}`} color="emerald" />
+                    <KPI icon={<Zap/>} label="Win Rate" val={`${summary.win_rate}%`} color="violet" />
+                    <KPI icon={<Activity/>} label="Trades" val={summary.total_trades} color="amber" />
                 </div>
 
-                {/* Status Bot */}
-                <div className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm ${summary.is_active ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
-                    <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${summary.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                        <span className="font-bold text-sm text-slate-700">{summary.is_active ? 'SISTEMA ONLINE' : 'SISTEMA OFFLINE'}</span>
+                {/* SECCIÓN DE VIGILANCIA IA - Lo solicitado */}
+                <section>
+                    <div className="flex items-center gap-2 mb-4 px-1">
+                        <ShieldCheck className="text-blue-500" size={20}/>
+                        <h2 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">AI Market Surveillance</h2>
                     </div>
-                    <span className="text-[10px] font-black text-slate-400 tracking-tighter uppercase">Real-Time Data</span>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {monitoring.map(m => (
+                            <MarketCard key={m.symbol} data={m} />
+                        ))}
+                    </div>
+                </section>
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard title="Balance" value={`$${summary.current_balance.toLocaleString()}`} icon={<DollarSign size={18}/>} color="blue" />
-                    <StatCard title="Total Profit" value={`$${summary.total_profit.toLocaleString()}`} icon={<TrendingUp size={18}/>} color="emerald" />
-                    <StatCard title="Win Rate" value={`${summary.win_rate}%`} icon={<PieChart size={18}/>} color="indigo" />
-                    <StatCard title="Trades" value={summary.total_trades} icon={<Activity size={18}/>} color="orange" />
-                </div>
-
-                {/* Gráfica Equity */}
-                <div className="bg-white p-6 rounded-3xl border shadow-sm">
-                    <h3 className="text-slate-800 font-bold mb-6 flex items-center gap-2 text-sm">
-                        <TrendingUp size={18} className="text-blue-600"/> RENDIMIENTO HISTÓRICO
-                    </h3>
-                    <div className="h-64 w-full">
+                {/* Gráfica de Rendimiento */}
+                <div className="bg-[#0f172a] border border-white/5 p-6 rounded-[2.5rem] shadow-2xl">
+                    <div className="flex justify-between items-center mb-8">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Equity Growth Curve</h3>
+                        <div className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full text-[10px] font-bold">H1 Timeframe</div>
+                    </div>
+                    <div className="h-72 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={history}>
                                 <defs>
-                                    <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <CartesianGrid strokeDasharray="0" vertical={false} stroke="rgba(255,255,255,0.03)" />
                                 <XAxis dataKey="time" hide />
                                 <YAxis domain={['auto', 'auto']} hide />
-                                <Tooltip 
-                                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
-                                    formatter={(value) => [`$${value.toLocaleString()}`, 'Balance']}
-                                />
-                                <Area type="monotone" dataKey="balance" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorBalance)" />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Area type="monotone" dataKey="balance" stroke="#3b82f6" strokeWidth={4} fill="url(#glow)" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Lista de Trades */}
-                <div className="bg-white rounded-3xl border shadow-sm overflow-hidden mb-8">
-                    <div className="p-5 border-b flex justify-between items-center bg-slate-50/50">
-                        <h3 className="font-bold text-slate-800 text-sm italic">Live Journal</h3>
-                        <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Últimos 10</div>
+                {/* Diario de Operaciones */}
+                <div className="bg-[#0f172a] border border-white/5 rounded-[2.5rem] overflow-hidden">
+                    <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Live Execution Log</h3>
                     </div>
-                    <div className="divide-y divide-slate-100">
-                        {trades.length > 0 ? trades.map(trade => (
-                            <div key={trade.id} className="p-4 flex items-center justify-between active:bg-slate-50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2.5 rounded-xl ${trade.profit > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                        {trade.profit > 0 ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
+                    <div className="divide-y divide-white/5">
+                        {trades.map(t => (
+                            <div key={t.id} className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-all">
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-3 rounded-2xl ${t.profit > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        {t.profit > 0 ? <TrendingUp size={18}/> : <TrendingDown size={18}/>}
                                     </div>
                                     <div>
-                                        <div className="font-bold text-slate-800 text-sm">{trade.symbol}</div>
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase">{trade.type} • {trade.close_time}</div>
+                                        <div className="font-black text-sm">{t.symbol}</div>
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase">{t.type} • {t.close_time}</div>
                                     </div>
                                 </div>
-                                <div className={`font-black text-sm ${trade.profit > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                    {trade.profit > 0 ? '+' : ''}{trade.profit.toFixed(2)}
+                                <div className={`font-mono font-bold ${t.profit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {t.profit > 0 ? '+' : ''}{t.profit.toFixed(2)}
                                 </div>
                             </div>
-                        )) : (
-                            <div className="p-10 text-center text-slate-400 text-sm">No hay operaciones recientes</div>
-                        )}
+                        ))}
                     </div>
                 </div>
             </main>
@@ -178,22 +138,76 @@ const Dashboard = ({ onLogout }) => {
     );
 };
 
-const StatCard = ({ title, value, icon, color }) => {
-    const colors = {
-        blue: "bg-blue-600 text-white shadow-blue-100",
-        emerald: "bg-emerald-500 text-white shadow-emerald-100",
-        indigo: "bg-indigo-600 text-white shadow-indigo-100",
-        orange: "bg-orange-500 text-white shadow-orange-100"
-    };
+// --- SUBCOMPONENTES ---
+
+const MarketCard = ({ data }) => {
+    const isBullish = data.ia_prob > 0.5;
     return (
-        <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col items-center text-center">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-2 shadow-lg ${colors[color]}`}>
-                {icon}
+        <div className="bg-[#0f172a] border border-white/5 p-5 rounded-3xl relative overflow-hidden group hover:border-blue-500/30 transition-all">
+            <div className={`absolute top-0 right-0 w-24 h-24 blur-3xl opacity-10 ${isBullish ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h4 className="font-black text-slate-100">{data.symbol}</h4>
+                    <p className="text-xs font-mono text-slate-500">${data.price.toFixed(data.symbol.includes('BTC') ? 2 : 4)}</p>
+                </div>
+                <div className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${data.status === 'ABIERTA' ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-500'}`}>
+                    {data.status}
+                </div>
             </div>
-            <div className="text-slate-400 text-[9px] font-black uppercase tracking-tighter mb-1">{title}</div>
-            <div className="text-base font-black text-slate-900 truncate w-full">{value}</div>
+            
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">AI Confidence</span>
+                    <span className={`text-lg font-mono font-black ${isBullish ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {(data.ia_prob * 100).toFixed(1)}%
+                    </span>
+                </div>
+                {/* Barra de Probabilidad Estilo Pro */}
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                        className={`h-full transition-all duration-1000 ${isBullish ? 'bg-emerald-500' : 'bg-red-500'}`} 
+                        style={{ width: `${data.ia_prob * 100}%` }}
+                    ></div>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold text-slate-600 uppercase">
+                    <span>RSI: {data.rsi.toFixed(1)}</span>
+                    <span>{isBullish ? 'Strong Buy Bias' : 'Strong Sell Bias'}</span>
+                </div>
+            </div>
         </div>
     );
 };
+
+const KPI = ({ icon, label, val, color }) => {
+    const colors = {
+        blue: "text-blue-400", emerald: "text-emerald-400", violet: "text-violet-400", amber: "text-amber-400"
+    };
+    return (
+        <div className="bg-[#0f172a] border border-white/5 p-5 rounded-[2rem] flex flex-col items-center text-center">
+            <div className={`mb-2 ${colors[color]}`}>{icon}</div>
+            <span className="text-[9px] font-black uppercase tracking-tighter text-slate-500 mb-1">{label}</span>
+            <span className="text-lg font-black tracking-tight">{val}</span>
+        </div>
+    );
+};
+
+const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-[#1e293b] border border-white/10 p-4 rounded-2xl shadow-2xl">
+                <p className="text-[10px] font-black text-slate-500 uppercase mb-1">{payload[0].payload.time}</p>
+                <p className="text-sm font-mono font-black text-blue-400">${payload[0].value.toLocaleString()}</p>
+            </div>
+        );
+    }
+    return null;
+};
+
+const LoadingScreen = () => (
+    <div className="h-screen w-full bg-[#0a0f1c] flex flex-col items-center justify-center">
+        <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-blue-500 font-black text-xs uppercase tracking-[0.3em] animate-pulse">Initializing Sentinel AI</p>
+    </div>
+);
 
 export default Dashboard;

@@ -162,6 +162,7 @@ if __name__ == "__main__":
         
             # 2. Sincronizar historial de trades para las gráficas
             db.sincronizar_trades(MAGIC_NUMBER)
+            db.actualizar_monitoreo(symbol, price, rsi, ia_prob, status)
 
             dashboard = []
             posiciones = mt5.positions_get(magic=MAGIC_NUMBER)

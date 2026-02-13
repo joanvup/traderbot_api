@@ -138,5 +138,14 @@ async def get_history(token: str = Depends(oauth2_scheme)):
             "balance": round(balance_acumulado, 2)
         })
     return history
+    
+@app.get("/stats/monitoring")
+async def get_monitoring(token: str = Depends(oauth2_scheme)):
+    db = SessionLocal()
+    res = db.execute(text("SELECT * FROM market_monitoring ORDER BY symbol ASC")).fetchall()
+    db.close()
+    return [{"symbol": r.symbol, "price": float(r.price), "rsi": float(r.rsi), 
+             "ia_prob": float(r.ia_prob), "status": r.status} for r in res]
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

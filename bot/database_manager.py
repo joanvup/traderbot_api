@@ -78,3 +78,20 @@ class DatabaseManager:
                 conn.close()
             except Exception as e:
                 print(f"Error DB (Trades): {e}")
+
+    def actualizar_monitoreo(self, symbol, price, rsi, ia_prob, status):
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            query = """
+                INSERT INTO market_monitoring (symbol, price, rsi, ia_prob, status)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE 
+                price=%s, rsi=%s, ia_prob=%s, status=%s
+            """
+            cursor.execute(query, (symbol, price, rsi, ia_prob, status, price, rsi, ia_prob, status))
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error DB (Monitoreo): {e}")
