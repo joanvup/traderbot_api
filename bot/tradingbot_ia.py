@@ -162,7 +162,6 @@ if __name__ == "__main__":
         
             # 2. Sincronizar historial de trades para las gráficas
             db.sincronizar_trades(MAGIC_NUMBER)
-            db.actualizar_monitoreo(symbol, price, rsi, ia_prob, status)
 
             dashboard = []
             posiciones = mt5.positions_get(magic=MAGIC_NUMBER)
@@ -207,6 +206,17 @@ if __name__ == "__main__":
                     num_pos += 1
                 
                 dashboard.append({"s": s, "p": last['close'], "ia": prob, "st": "ABIERTA" if abierta else señal})
+                # ==========================================
+                # ENVIAR TELEMETRÍA A LA WEB (CORREGIDO)
+                # ==========================================
+                # Usamos 's' que es nuestra variable del bucle
+                db.actualizar_monitoreo(
+                    symbol=s, 
+                    price=float(last['close']), 
+                    rsi=float(last['rsi']), 
+                    ia_prob=float(prob), 
+                    status= "ABIERTA" if abierta else señal
+                )
 
             # Imprimir Dashboard Pro
             os.system('cls' if os.name == 'nt' else 'clear')

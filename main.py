@@ -7,7 +7,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 import uvicorn
-
+import csv
+from fastapi.responses import StreamingResponse
+import io
 
 
 # Configuración
@@ -146,6 +148,27 @@ async def get_monitoring(token: str = Depends(oauth2_scheme)):
     db.close()
     return [{"symbol": r.symbol, "price": float(r.price), "rsi": float(r.rsi), 
              "ia_prob": float(r.ia_prob), "status": r.status} for r in res]
+
+@app.get("/export/csv")
+async def export_trades_csv(token: str = Depends(oauth2_scheme)):
+    db = SessionLocal()
+    query = text("SELECT symbol, type, lotage, open_price, close_price, profit, close_time FROM trades ORDER BY close_time DESC")
+    res = db.execute(query).fetchall()
+    db.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Symbol", "Type", "Lotage", "Open Price", "Close Price", "Profit", "Close Time"])
+    
+    for r in res:
+        writer.writerow([r[0], r[1], r[2], float(r[3]), float(r[4]), float(r[5]), r[6].strftime("%Y-%m-%d %H:%M")])
+    
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=traderbot_report.csv"}
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

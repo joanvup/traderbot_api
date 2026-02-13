@@ -2,6 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from './api/axios';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Activity, LogOut, RefreshCw, Clock, Cpu, Zap, ShieldCheck } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { Download, FileText, Table as TableIcon } from 'lucide-react';
 
 const Dashboard = ({ onLogout }) => {
     const [summary, setSummary] = useState(null);
@@ -23,9 +26,43 @@ const Dashboard = ({ onLogout }) => {
             ]);
             setSummary(s.data); setHistory(h.data); setTrades(t.data); setMonitoring(m.data);
             setLastUpdate(new Date());
-        } catch (err) { console.error(err); } 
+        } catch (err) { console.error(err); }
         finally { setLoading(false); setRefreshing(false); }
     }, []);
+
+    const exportPDF = () => {
+        const doc = new jsPDF();
+        doc.setFontSize(20);
+        doc.text("TraderBot v5.0 - Reporte de Rendimiento", 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 30);
+        doc.text(`Profit Total: $${summary.total_profit}`, 14, 38);
+
+        const tableRows = trades.map(t => [
+            t.symbol, t.type, t.profit.toFixed(2), t.close_time
+        ]);
+
+        doc.autoTable({
+            head: [['Símbolo', 'Tipo', 'Profit ($)', 'Fecha']],
+            body: tableRows,
+            startY: 45,
+            theme: 'grid'
+        });
+
+        doc.save(`Reporte_TraderBot_${new Date().getTime()}.pdf`);
+    };
+
+    const exportCSV = async () => {
+        try {
+            const response = await api.get('/export/csv', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'historial_trades.csv');
+            document.body.appendChild(link);
+            link.click();
+        } catch (err) { console.error("Error al exportar CSV", err); }
+    };
 
     useEffect(() => {
         fetchData();
@@ -41,7 +78,7 @@ const Dashboard = ({ onLogout }) => {
             <nav className="bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
                 <div className="flex items-center gap-4">
                     <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-2xl shadow-lg shadow-blue-500/20">
-                        <Cpu size={22} className="text-white animate-pulse"/>
+                        <Cpu size={22} className="text-white animate-pulse" />
                     </div>
                     <div>
                         <h1 className="font-black text-lg tracking-tight uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">AI Sentinel <span className="text-blue-500">v5.0</span></h1>
@@ -56,25 +93,25 @@ const Dashboard = ({ onLogout }) => {
                         <RefreshCw size={20} className={refreshing ? "animate-spin" : ""} />
                     </button>
                     <button onClick={onLogout} className="p-2.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
-                        <LogOut size={20}/>
+                        <LogOut size={20} />
                     </button>
                 </div>
             </nav>
 
             <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-                
+
                 {/* Métricas Principales */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KPI icon={<DollarSign/>} label="Balance" val={`$${summary.current_balance.toLocaleString()}`} color="blue" />
-                    <KPI icon={<TrendingUp/>} label="Net Profit" val={`$${summary.total_profit.toLocaleString()}`} color="emerald" />
-                    <KPI icon={<Zap/>} label="Win Rate" val={`${summary.win_rate}%`} color="violet" />
-                    <KPI icon={<Activity/>} label="Trades" val={summary.total_trades} color="amber" />
+                    <KPI icon={<DollarSign />} label="Balance" val={`$${summary.current_balance.toLocaleString()}`} color="blue" />
+                    <KPI icon={<TrendingUp />} label="Net Profit" val={`$${summary.total_profit.toLocaleString()}`} color="emerald" />
+                    <KPI icon={<Zap />} label="Win Rate" val={`${summary.win_rate}%`} color="violet" />
+                    <KPI icon={<Activity />} label="Trades" val={summary.total_trades} color="amber" />
                 </div>
 
                 {/* SECCIÓN DE VIGILANCIA IA - Lo solicitado */}
                 <section>
                     <div className="flex items-center gap-2 mb-4 px-1">
-                        <ShieldCheck className="text-blue-500" size={20}/>
+                        <ShieldCheck className="text-blue-500" size={20} />
                         <h2 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">AI Market Surveillance</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -95,8 +132,8 @@ const Dashboard = ({ onLogout }) => {
                             <AreaChart data={history}>
                                 <defs>
                                     <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="0" vertical={false} stroke="rgba(255,255,255,0.03)" />
@@ -113,13 +150,21 @@ const Dashboard = ({ onLogout }) => {
                 <div className="bg-[#0f172a] border border-white/5 rounded-[2.5rem] overflow-hidden">
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
                         <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Live Execution Log</h3>
+                        <div className="flex gap-2">
+                            <button onClick={exportCSV} className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white transition-all">
+                                <TableIcon size={18} />
+                            </button>
+                            <button onClick={exportPDF} className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white transition-all">
+                                <FileText size={18} />
+                            </button>
+                        </div>
                     </div>
                     <div className="divide-y divide-white/5">
                         {trades.map(t => (
                             <div key={t.id} className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-all">
                                 <div className="flex items-center gap-4">
                                     <div className={`p-3 rounded-2xl ${t.profit > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                        {t.profit > 0 ? <TrendingUp size={18}/> : <TrendingDown size={18}/>}
+                                        {t.profit > 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
                                     </div>
                                     <div>
                                         <div className="font-black text-sm">{t.symbol}</div>
@@ -154,7 +199,7 @@ const MarketCard = ({ data }) => {
                     {data.status}
                 </div>
             </div>
-            
+
             <div className="space-y-3">
                 <div className="flex justify-between items-end">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">AI Confidence</span>
@@ -164,8 +209,8 @@ const MarketCard = ({ data }) => {
                 </div>
                 {/* Barra de Probabilidad Estilo Pro */}
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div 
-                        className={`h-full transition-all duration-1000 ${isBullish ? 'bg-emerald-500' : 'bg-red-500'}`} 
+                    <div
+                        className={`h-full transition-all duration-1000 ${isBullish ? 'bg-emerald-500' : 'bg-red-500'}`}
                         style={{ width: `${data.ia_prob * 100}%` }}
                     ></div>
                 </div>
