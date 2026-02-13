@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    // Localmente usa la IP de tu PC o localhost. En producción cambiar a tu URL https
-    baseURL: 'http://localhost:8000', 
+    baseURL: 'https://traderbot.colegiobilingue.edu.co/api', // Nota el /api
 });
 
 // Interceptor para incluir el token JWT en cada petición automáticamente

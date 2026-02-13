@@ -12,8 +12,8 @@ from database_manager import DatabaseManager
 
 # Configura tus credenciales de MySQL Community
 db = DatabaseManager(
-    host="localhost",
-    user="user_bot",
+    host="192.168.3.5",
+    user="bot_user",
     password="S0portefcbv",
     database="traderbot_db"
 )
