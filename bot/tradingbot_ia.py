@@ -19,15 +19,15 @@ if not os.path.exists(MODEL_DIR): os.makedirs(MODEL_DIR)
 
 # --- CONFIGURACIÓN DE ALTO RENDIMIENTO (v5.0 PRO) ---
 MAX_ACTIVOS = 30                 # Escalado a 30 mercados
-MAX_POSICIONES_GLOBALES = 8      # Aumentado el límite de riesgo controlado
+MAX_POSICIONES_GLOBALES = 3     # Aumentado el límite de riesgo controlado
 MAGIC_NUMBER = 20260213
 TIMEFRAME = mt5.TIMEFRAME_H1
-PROBABILIDAD_IA_MINIMA = 0.72
+PROBABILIDAD_IA_MINIMA = 0.78
 RE_TRAIN_HOURS = 24
 
 # Parámetros de Riesgo
-ATR_MULTI_SL = 3.0  
-ATR_MULTI_TP = 6.0  
+ATR_MULTI_SL = 1.5  
+ATR_MULTI_TP = 4.5
 FEATURES = ['rsi', 'ema_l', 'ema_r', 'volatilidad']
 
 # Inicialización de DB

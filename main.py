@@ -126,17 +126,30 @@ async def get_recent_trades(token: str = Depends(oauth2_scheme)):
 @app.get("/stats/history")
 async def get_history(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    # Generamos una curva de balance acumulado
+    # Obtenemos trades cerrados
     query = text("SELECT close_time, profit FROM trades ORDER BY close_time ASC")
     res = db.execute(query).fetchall()
     db.close()
     
     history = []
-    balance_acumulado = 100000.0 # Balance inicial base
+    # Primer punto: Balance inicial antes del primer trade
+    balance_acumulado = 100000.0 
+    
+    # Si no hay trades, mostramos una línea recta con el balance actual
+    if not res:
+        # Intentamos obtener el balance actual del bot_status
+        db = SessionLocal()
+        status = db.execute(text("SELECT balance FROM bot_status WHERE id=1")).fetchone()
+        db.close()
+        current_b = float(status[0]) if status else 100000.0
+        return [{"time": "Inicio", "balance": 100000.0}, {"time": "Actual", "balance": current_b}]
+
+    # Si hay trades, construimos la curva
+    history.append({"time": "Inicio", "balance": 100000.0})
     for r in res:
         balance_acumulado += float(r.profit)
         history.append({
-            "time": r.close_time.strftime("%d/%m"),
+            "time": r.close_time.strftime("%d/%m %H:%M"),
             "balance": round(balance_acumulado, 2)
         })
     return history

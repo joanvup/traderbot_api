@@ -35,49 +35,54 @@ class DatabaseManager:
             print(f"Error DB (Status): {e}")
 
     def sincronizar_trades(self, magic_number):
-        """Busca trades cerrados en MT5 y los guarda en MySQL si no existen"""
+        """Busca trades cerrados en MT5 y los guarda con validación extra"""
         import MetaTrader5 as mt5
-        
-        # CORRECCIÓN: Usamos timedelta directamente
-        from_date = datetime.now() - timedelta(days=7)
-        
-        # Obtener historial desde MT5
+        from datetime import datetime, timedelta
+    
+        # 1. Aumentamos el rango de búsqueda a 30 días para no perder nada
+        from_date = datetime.now() - timedelta(days=30)
+    
+        # 2. Obtenemos el historial completo del bot
         history_deals = mt5.history_deals_get(from_date, datetime.now(), group=f"*{magic_number}*")
         
-        if history_deals and len(history_deals) > 0:
+        if history_deals is None:
+            print(f"Error al consultar historial: {mt5.last_error()}")
+            return
+
+        if len(history_deals) > 0:
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 
                 for deal in history_deals:
-                    # Entry 1 significa 'OUT' (posición cerrada)
-                    if deal.entry == 1: 
+                    # MT5: entry 1 es 'OUT' (Cierre), entry 2 es 'IN/OUT' (Reverso)
+                    # Solo procesamos cierres reales que tengan profit/loss
+                    if deal.entry in [1, 2] and deal.profit != 0: 
                         query = """
                             INSERT IGNORE INTO trades 
                             (ticket, symbol, type, lotage, open_price, close_price, profit, close_time, magic_number)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """
-                        # Determinar tipo de operación
-                        # deal.type 0=Buy, 1=Sell. Si el deal es OUT y era Buy, el tipo original es BUY.
                         t_type = "BUY" if deal.type == 1 else "SELL"
-                        
                         c_time = datetime.fromtimestamp(deal.time)
                         
-                        # Calculamos un precio de apertura estimado para la DB
-                        # (Opcional: podrías buscar el deal.entry == 0 para el precio exacto)
+                        # Intentamos obtener el precio de apertura real del deal anterior
+                        # Si no se puede, usamos el deal actual como referencia
+                        open_price = getattr(deal, 'price_position', deal.price)
+                        
                         values = (
                             deal.ticket, deal.symbol, t_type, deal.volume,
-                            deal.price, # precio de cierre
-                            deal.price, # precio de cierre
-                            deal.profit, c_time, magic_number
+                            open_price, deal.price, deal.profit, 
+                            c_time, magic_number
                         )
                         cursor.execute(query, values)
                 
                 conn.commit()
                 cursor.close()
                 conn.close()
+                # print("Sincronización exitosa con MySQL") # Debug
             except Exception as e:
-                print(f"Error DB (Trades): {e}")
+                print(f"Error DB (Sincronización Crítica): {e}")
 
     def actualizar_monitoreo(self, symbol, price, rsi, ia_prob, status):
         try:
