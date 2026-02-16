@@ -1,5 +1,7 @@
 import mysql.connector
 from datetime import datetime, timedelta # Agregamos timedelta aquí
+import MetaTrader5 as mt5
+
 
 class DatabaseManager:
     def __init__(self, host, user, password, database):
@@ -35,54 +37,52 @@ class DatabaseManager:
             print(f"Error DB (Status): {e}")
 
     def sincronizar_trades(self, magic_number):
-        """Busca trades cerrados en MT5 y los guarda con validación extra"""
-        import MetaTrader5 as mt5
-        from datetime import datetime, timedelta
-    
-        # 1. Aumentamos el rango de búsqueda a 30 días para no perder nada
-        from_date = datetime.now() - timedelta(days=30)
-    
-        # 2. Obtenemos el historial completo del bot
-        history_deals = mt5.history_deals_get(from_date, datetime.now(), group=f"*{magic_number}*")
+        # Buscamos desde el inicio de los tiempos para recuperar todo
+        from_date = datetime(2020, 1, 1)
+        to_date = datetime.now()
+        
+        # 1. Obtenemos TODOS los deals (sin filtrar por Magic Number por ahora)
+        history_deals = mt5.history_deals_get(from_date, to_date)
         
         if history_deals is None:
-            print(f"Error al consultar historial: {mt5.last_error()}")
+            print(f"Error MT5 Historial: {mt5.last_error()}")
             return
 
-        if len(history_deals) > 0:
-            try:
-                conn = self._get_connection()
-                cursor = conn.cursor()
-                
-                for deal in history_deals:
-                    # MT5: entry 1 es 'OUT' (Cierre), entry 2 es 'IN/OUT' (Reverso)
-                    # Solo procesamos cierres reales que tengan profit/loss
-                    if deal.entry in [1, 2] and deal.profit != 0: 
-                        query = """
-                            INSERT IGNORE INTO trades 
-                            (ticket, symbol, type, lotage, open_price, close_price, profit, close_time, magic_number)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """
-                        t_type = "BUY" if deal.type == 1 else "SELL"
-                        c_time = datetime.fromtimestamp(deal.time)
-                        
-                        # Intentamos obtener el precio de apertura real del deal anterior
-                        # Si no se puede, usamos el deal actual como referencia
-                        open_price = getattr(deal, 'price_position', deal.price)
-                        
-                        values = (
-                            deal.ticket, deal.symbol, t_type, deal.volume,
-                            open_price, deal.price, deal.profit, 
-                            c_time, magic_number
-                        )
-                        cursor.execute(query, values)
-                
-                conn.commit()
-                cursor.close()
-                conn.close()
-                # print("Sincronización exitosa con MySQL") # Debug
-            except Exception as e:
-                print(f"Error DB (Sincronización Crítica): {e}")
+        deals_procesados = 0
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            for deal in history_deals:
+                # Procesamos solo trades que tengan impacto financiero (profit != 0)
+                if deal.profit != 0: 
+                    query = """
+                        INSERT IGNORE INTO trades 
+                        (ticket, symbol, type, lotage, open_price, close_price, profit, close_time, magic_number)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    # 0=Buy, 1=Sell (En MT5 Deals)
+                    t_type = "BUY" if deal.type == 0 else "SELL"
+                    c_time = datetime.fromtimestamp(deal.time)
+                    
+                    # Intentamos capturar el magic_number real del deal
+                    m_num = deal.magic if deal.magic != 0 else magic_number
+                    
+                    values = (
+                        deal.ticket, deal.symbol, t_type, deal.volume,
+                        deal.price, deal.price, deal.profit, # Usamos price como ref
+                        c_time, m_num
+                    )
+                    cursor.execute(query, values)
+                    deals_procesados += 1
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            if deals_procesados > 0:
+                print(f"✅ Sincronizados {deals_procesados} trades con MySQL.")
+        except Exception as e:
+            print(f"❌ Error Crítico DB Trades: {e}")
 
     def actualizar_monitoreo(self, symbol, price, rsi, ia_prob, status):
         try:
