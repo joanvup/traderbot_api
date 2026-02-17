@@ -37,52 +37,38 @@ class DatabaseManager:
             print(f"Error DB (Status): {e}")
 
     def sincronizar_trades(self, magic_number):
-        # Buscamos desde el inicio de los tiempos para recuperar todo
-        from_date = datetime(2020, 1, 1)
-        to_date = datetime.now()
+        import MetaTrader5 as mt5
+        from datetime import datetime, timedelta
         
-        # 1. Obtenemos TODOS los deals (sin filtrar por Magic Number por ahora)
-        history_deals = mt5.history_deals_get(from_date, to_date)
+        # 30 días de historial
+        from_date = datetime.now() - timedelta(days=30)
+        history_deals = mt5.history_deals_get(from_date, datetime.now(), group=f"*{magic_number}*")
         
-        if history_deals is None:
-            print(f"Error MT5 Historial: {mt5.last_error()}")
-            return
-
-        deals_procesados = 0
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            for deal in history_deals:
-                # Procesamos solo trades que tengan impacto financiero (profit != 0)
-                if deal.profit != 0: 
-                    query = """
-                        INSERT IGNORE INTO trades 
-                        (ticket, symbol, type, lotage, open_price, close_price, profit, close_time, magic_number)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                    # 0=Buy, 1=Sell (En MT5 Deals)
-                    t_type = "BUY" if deal.type == 0 else "SELL"
-                    c_time = datetime.fromtimestamp(deal.time)
-                    
-                    # Intentamos capturar el magic_number real del deal
-                    m_num = deal.magic if deal.magic != 0 else magic_number
-                    
-                    values = (
-                        deal.ticket, deal.symbol, t_type, deal.volume,
-                        deal.price, deal.price, deal.profit, # Usamos price como ref
-                        c_time, m_num
-                    )
-                    cursor.execute(query, values)
-                    deals_procesados += 1
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            if deals_procesados > 0:
-                print(f"✅ Sincronizados {deals_procesados} trades con MySQL.")
-        except Exception as e:
-            print(f"❌ Error Crítico DB Trades: {e}")
+        if history_deals:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                for deal in history_deals:
+                    # FILTRO: Solo trades reales (no depósitos) y que sean cierres (entry out=1)
+                    if deal.symbol != "" and deal.entry == 1:
+                        query = """
+                            INSERT IGNORE INTO trades 
+                            (ticket, symbol, type, lotage, open_price, close_price, profit, close_time, magic_number)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """
+                        t_type = "BUY" if deal.type == 1 else "SELL"
+                        c_time = datetime.fromtimestamp(deal.time)
+                        # En MT5, el beneficio real ya incluye swaps y comisiones
+                        cursor.execute(query, (
+                            deal.ticket, deal.symbol, t_type, deal.volume,
+                            deal.price - (deal.profit/deal.volume/10) if deal.volume > 0 else 0,
+                            deal.price, deal.profit, c_time, magic_number
+                        ))
+                conn.commit()
+                cursor.close()
+                conn.close()
+            except Exception as e:
+                print(f"Error DB: {e}")
 
     def actualizar_monitoreo(self, symbol, price, rsi, ia_prob, status):
         try:
