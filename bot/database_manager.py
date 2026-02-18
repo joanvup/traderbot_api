@@ -35,14 +35,13 @@ class DatabaseManager:
 
     def sincronizar_trades(self, magic_number):
         import MetaTrader5 as mt5
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
-        # 1. Forzamos la fecha desde el inicio de la cuenta (o un año muy atrás)
+        # 1. Rango total desde el inicio
         from_date = datetime(2010, 1, 1) 
         to_date = datetime.now()
         
-        # 2. Obtenemos DEALS (transacciones individuales). Es más fiable que 'positions'
-        # Pedimos TODOS los deals de la cuenta
+        # 2. Obtenemos DEALS (transacciones contables)
         history_deals = mt5.history_deals_get(from_date, to_date)
 
         if history_deals is None:
@@ -55,35 +54,34 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             for deal in history_deals:
-                # Filtro 1: Solo trades de CIERRE (entry == 1 es OUT)
-                # Filtro 2: Ignorar depósitos (symbol no debe estar vacío)
-                if deal.entry == 1 and deal.symbol != "":
-                    
-                    # Buscamos si el ticket ya existe
+                # --- FILTRO DE INTEGRIDAD ---
+                # Procesamos si es:
+                # A. Un cierre de operación (entry == 1)
+                # B. El depósito inicial (type == 2 -> DEAL_TYPE_BALANCE)
+                is_balance = deal.type == 2 
+                is_close = deal.entry == 1
+
+                if is_balance or is_close:
+                    # Verificar si ya existe este ticket
                     cursor.execute(f"SELECT id FROM trades WHERE ticket = {deal.ticket}")
                     if cursor.fetchone(): continue
 
-                    # Obtenemos el tipo original
-                    # deal.type: 0 es Buy (el cierre de un sell), 1 es Sell (el cierre de un buy)
-                    trade_type = "SELL" if deal.type == 0 else "BUY"
-                    
-                    # IMPORTANTE: Para obtener el OPEN_TIME real en un deal de cierre, 
-                    # MetaTrader vincula el deal con la posición.
-                    close_time = datetime.fromtimestamp(deal.time)
-                    
-                    # Intentamos buscar el momento de apertura (el deal de entrada)
-                    # Si no lo encontramos, usamos una estimación o el mismo tiempo
-                    open_time = close_time # Valor por defecto
-                    open_price = deal.price # Valor por defecto
+                    # Valores por defecto para depósitos
+                    symbol = deal.symbol if deal.symbol != "" else "BALANCE"
+                    trade_type = "DEPOSIT" if is_balance else ("SELL" if deal.type == 0 else "BUY")
+                    c_time = datetime.fromtimestamp(deal.time)
+                    open_time = c_time
+                    open_price = deal.price
 
-                    # Buscamos la transacción de entrada (IN) para esta misma posición
-                    entry_deals = mt5.history_deals_get(position=deal.position_id)
-                    if entry_deals:
-                        for d_entry in entry_deals:
-                            if d_entry.entry == 0: # 0 es IN (Apertura)
-                                open_time = datetime.fromtimestamp(d_entry.time)
-                                open_price = d_entry.price
-                                break
+                    # Si es un cierre, intentamos buscar su apertura para tener tiempos exactos
+                    if is_close:
+                        entry_deals = mt5.history_deals_get(position=deal.position_id)
+                        if entry_deals:
+                            for d_entry in entry_deals:
+                                if d_entry.entry == 0: # IN
+                                    open_time = datetime.fromtimestamp(d_entry.time)
+                                    open_price = d_entry.price
+                                    break
 
                     query = """
                         INSERT INTO trades 
@@ -91,17 +89,13 @@ class DatabaseManager:
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
+                    # Profit neto incluyendo comisiones y swaps
+                    net_profit = deal.profit + deal.commission + deal.swap
+
                     values = (
-                        deal.ticket,
-                        deal.symbol,
-                        trade_type,
-                        deal.volume,
-                        open_price,
-                        open_time,
-                        deal.price,
-                        deal.profit + deal.commission + deal.swap, # Profit Neto Real
-                        close_time,
-                        deal.magic
+                        deal.ticket, symbol, trade_type, deal.volume,
+                        open_price, open_time, deal.price,
+                        net_profit, c_time, deal.magic
                     )
                     cursor.execute(query, values)
                     procesados += 1
@@ -110,6 +104,6 @@ class DatabaseManager:
             cursor.close()
             conn.close()
             if procesados > 0:
-                print(f"✅ Sincronización Masiva: {procesados} trades nuevos guardados.")
+                print(f"✅ Sincronización Exitosa: {procesados} registros nuevos (incluyendo balance).")
         except Exception as e:
-            print(f"❌ Error en Sincronización Masiva: {e}")
+            print(f"❌ Error en Sincronización: {e}")

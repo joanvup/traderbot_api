@@ -81,17 +81,20 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.get("/stats/summary")
 async def get_summary(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    # Query para obtener Profit Total y Win Rate
-    query = text("""
+    # Solo contamos trades reales (no el depósito) para el Win Rate
+    q_trades = text("""
         SELECT 
             SUM(profit) as total_profit,
             COUNT(*) as total_trades,
             COUNT(CASE WHEN profit > 0 THEN 1 END) as wins
-        FROM trades
+        FROM trades WHERE symbol != 'BALANCE'
     """)
-    res = db.execute(query).fetchone()
+    res = db.execute(q_trades).fetchone()
     
-    # Query para balance actual
+    # El profit total sí debe incluir todo para cuadrar con el balance
+    q_net = text("SELECT SUM(profit) FROM trades")
+    net_profit_all = db.execute(q_net).scalar() or 0
+
     status_res = db.execute(text("SELECT balance, equity, is_active FROM bot_status WHERE id=1")).fetchone()
     db.close()
 
@@ -99,13 +102,13 @@ async def get_summary(token: str = Depends(oauth2_scheme)):
     win_rate = (res[2] / total_trades * 100) if total_trades > 0 else 0
 
     return {
-        "total_profit": float(res[0]) if res[0] else 0,
+        "total_profit": round(float(net_profit_all), 2),
         "win_rate": round(win_rate, 2),
         "total_trades": total_trades,
         "current_balance": float(status_res[0]) if status_res else 0,
+        "current_equity": float(status_res[1]) if status_res else 0,
         "is_active": status_res[2] if status_res else False
     }
-# Añadir al final de main.py (dentro de las rutas protegidas)
 
 @app.get("/stats/trades")
 async def get_paginated_trades(page: int = 1, limit: int = 10, token: str = Depends(oauth2_scheme)):
@@ -154,34 +157,21 @@ async def get_paginated_trades(page: int = 1, limit: int = 10, token: str = Depe
 @app.get("/stats/history")
 async def get_history(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    query = text("SELECT profit FROM trades ORDER BY close_time ASC")
+    # Traemos todo, incluyendo el depósito
+    query = text("SELECT close_time, profit, type FROM trades ORDER BY close_time ASC")
     res = db.execute(query).fetchall()
-    
-    # Obtener el balance actual y profit total para deducir el balance de inicio
-    total_profit = sum([float(r[0]) for r in res])
-    status = db.execute(text("SELECT balance FROM bot_status WHERE id=1")).fetchone()
     db.close()
-    
-    current_balance = float(status[0]) if status else 100000.0
-    # Balance de inicio = Balance actual - Todo lo ganado/perdido
-    start_balance = current_balance - total_profit
     
     history = []
-    accumulated = start_balance
-    history.append({"time": "Inicio", "balance": round(start_balance, 2)})
-
-    # Recalcular curva
-    query_full = text("SELECT close_time, profit FROM trades ORDER BY close_time ASC")
-    db = SessionLocal()
-    res_full = db.execute(query_full).fetchall()
-    db.close()
-
-    for r in res_full:
-        accumulated += float(r[1])
+    balance_acumulado = 0
+    
+    for r in res:
+        balance_acumulado += float(r[1])
         history.append({
             "time": r[0].strftime("%d/%m %H:%M"),
-            "balance": round(accumulated, 2)
+            "balance": round(balance_acumulado, 2)
         })
+    
     return history
     
 @app.get("/stats/monitoring")

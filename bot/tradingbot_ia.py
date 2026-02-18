@@ -102,22 +102,35 @@ def inicializar_cerebros_paralelos(activos_lista):
         else: agregar_log(f"Fallo IA {symbol}: {status}")
 
 def seleccionar_mejores_activos_dinamico():
-    """Selecciona los 15 activos más prometedores por spread y datos"""
-    agregar_log("Re-escaneando mercado para los mejores activos...")
-    todos_simbolos = mt5.symbols_get()
-    candidatos_raw = []
+    """Selecciona los activos más prometedores con manejo de errores"""
+    agregar_log("Escaneando mercado...")
+    
+    # Intentar obtener los símbolos (reintentar si devuelve None)
+    todos_simbolos = None
+    for i in range(5): # 5 intentos
+        todos_simbolos = mt5.symbols_get()
+        if todos_simbolos is not None:
+            break
+        time.sleep(1)
 
+    if todos_simbolos is None:
+        agregar_log("❌ ERROR: No se pudo obtener la lista de símbolos de MT5. ¿Está abierto el terminal?")
+        return []
+
+    candidatos_raw = []
     for s in todos_simbolos:
         # Filtro de visibilidad y relevancia
         if s.visible and any(x in s.name for x in ["USD", "BTC", "XAU", "NAS", "ETH", "GOLD"]):
             # Filtro por spread y precio
-            spread_val = s.spread if s.spread > 0 else 1000 # Evitar división por cero
+            spread_val = s.spread if s.spread > 0 else 1000
             ask_val = s.ask if s.ask > 0 else 1
-            score = (spread_val / ask_val) * 1000 # Score bajo = bueno
-            
+            score = (spread_val / ask_val) * 1000 
             candidatos_raw.append({"symbol": s.name, "score": score})
 
-    # Ordenar y seleccionar los MAX_ACTIVOS
+    if not candidatos_raw:
+        agregar_log("⚠️ No se encontraron activos candidatos. Revisa 'Observación de Mercado'.")
+        return []
+
     seleccionados = sorted(candidatos_raw, key=lambda x: x['score'])[:MAX_ACTIVOS]
     return [s['symbol'] for s in seleccionados]
 
@@ -175,10 +188,20 @@ def abrir_orden(tipo, symbol, atr):
 # ==========================================
 
 if __name__ == "__main__":
+    # Inicializar con reintentos
     if not mt5.initialize():
-        print("Error inicializando MT5"); quit()
+        print(f"Error inicializando MT5: {mt5.last_error()}")
+        quit()
         
+    print("✅ MT5 Conectado. Iniciando escaneo de activos...")
+    
     activos_actuales = seleccionar_mejores_activos_dinamico()
+    
+    if not activos_actuales:
+        print("❌ El bot no pudo seleccionar activos. Deteniendo.")
+        mt5.shutdown()
+        quit()
+        
     inicializar_cerebros_paralelos(activos_actuales)
     
     db_executor = ThreadPoolExecutor(max_workers=2)
