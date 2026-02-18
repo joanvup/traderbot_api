@@ -154,35 +154,34 @@ async def get_paginated_trades(page: int = 1, limit: int = 10, token: str = Depe
 @app.get("/stats/history")
 async def get_history(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    # Obtenemos todos los trades cerrados para un balance acumulado real
-    query = text("SELECT close_time, profit FROM trades ORDER BY close_time ASC")
+    query = text("SELECT profit FROM trades ORDER BY close_time ASC")
     res = db.execute(query).fetchall()
+    
+    # Obtener el balance actual y profit total para deducir el balance de inicio
+    total_profit = sum([float(r[0]) for r in res])
+    status = db.execute(text("SELECT balance FROM bot_status WHERE id=1")).fetchone()
     db.close()
     
+    current_balance = float(status[0]) if status else 100000.0
+    # Balance de inicio = Balance actual - Todo lo ganado/perdido
+    start_balance = current_balance - total_profit
+    
     history = []
-    
-    # Balance inicial de la cuenta
-    initial_balance = 100000.0 
-    balance_acumulado = initial_balance
-    
-    # Añadir un punto de inicio a la gráfica
-    history.append({"time": "Inicio", "balance": initial_balance})
+    accumulated = start_balance
+    history.append({"time": "Inicio", "balance": round(start_balance, 2)})
 
-    for r in res:
-        balance_acumulado += float(r.profit)
+    # Recalcular curva
+    query_full = text("SELECT close_time, profit FROM trades ORDER BY close_time ASC")
+    db = SessionLocal()
+    res_full = db.execute(query_full).fetchall()
+    db.close()
+
+    for r in res_full:
+        accumulated += float(r[1])
         history.append({
-            "time": r.close_time.strftime("%d/%m %H:%M"),
-            "balance": round(balance_acumulado, 2)
+            "time": r[0].strftime("%d/%m %H:%M"),
+            "balance": round(accumulated, 2)
         })
-    
-    # Si no hay trades cerrados, la gráfica mostrará el balance inicial actual
-    if len(history) == 1: # Solo el punto de inicio
-        db = SessionLocal()
-        status_res = db.execute(text("SELECT balance FROM bot_status WHERE id=1")).fetchone()
-        db.close()
-        current_balance = float(status_res[0]) if status_res else initial_balance
-        history.append({"time": datetime.now().strftime("%d/%m %H:%M"), "balance": current_balance})
-        
     return history
     
 @app.get("/stats/monitoring")

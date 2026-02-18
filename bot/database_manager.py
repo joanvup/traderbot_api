@@ -34,21 +34,19 @@ class DatabaseManager:
             print(f"Error DB (Status): {e}")
 
     def sincronizar_trades(self, magic_number):
-        """
-        Sincroniza trades buscando en el historial de POSICIONES CERRADAS de MT5.
-        Esto es más preciso para obtener open_time y open_price.
-        """
         import MetaTrader5 as mt5
-        
-        # Buscamos historial desde el inicio del 2020 para capturar todo
-        from_date = datetime(2020, 1, 1) 
+        from datetime import datetime, timedelta
+
+        # 1. Forzamos la fecha desde el inicio de la cuenta (o un año muy atrás)
+        from_date = datetime(2010, 1, 1) 
         to_date = datetime.now()
         
-        # Obtenemos TODAS las posiciones cerradas del historial de la cuenta
-        closed_positions = mt5.history_positions_get(from_date, to_date)
+        # 2. Obtenemos DEALS (transacciones individuales). Es más fiable que 'positions'
+        # Pedimos TODOS los deals de la cuenta
+        history_deals = mt5.history_deals_get(from_date, to_date)
 
-        if closed_positions is None:
-            print(f"Error MT5: No se pudo obtener historial de posiciones. {mt5.last_error()}")
+        if history_deals is None:
+            print(f"Error MT5: {mt5.last_error()}")
             return
 
         procesados = 0
@@ -56,34 +54,54 @@ class DatabaseManager:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            for pos in closed_positions:
-                # Solo procesamos posiciones cerradas que tengan un profit != 0 y sean de nuestro bot
-                if pos.profit != 0 and pos.magic == magic_number: 
-                    # Verificar si ya existe este ticket en la DB para evitar duplicados
-                    cursor.execute(f"SELECT COUNT(*) FROM trades WHERE ticket = {pos.ticket}")
-                    if cursor.fetchone()[0] > 0:
-                        continue # Ya existe, saltar
-
-                    # Determinar el tipo de operación (Buy/Sell)
-                    trade_type = "BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL"
+            for deal in history_deals:
+                # Filtro 1: Solo trades de CIERRE (entry == 1 es OUT)
+                # Filtro 2: Ignorar depósitos (symbol no debe estar vacío)
+                if deal.entry == 1 and deal.symbol != "":
                     
+                    # Buscamos si el ticket ya existe
+                    cursor.execute(f"SELECT id FROM trades WHERE ticket = {deal.ticket}")
+                    if cursor.fetchone(): continue
+
+                    # Obtenemos el tipo original
+                    # deal.type: 0 es Buy (el cierre de un sell), 1 es Sell (el cierre de un buy)
+                    trade_type = "SELL" if deal.type == 0 else "BUY"
+                    
+                    # IMPORTANTE: Para obtener el OPEN_TIME real en un deal de cierre, 
+                    # MetaTrader vincula el deal con la posición.
+                    close_time = datetime.fromtimestamp(deal.time)
+                    
+                    # Intentamos buscar el momento de apertura (el deal de entrada)
+                    # Si no lo encontramos, usamos una estimación o el mismo tiempo
+                    open_time = close_time # Valor por defecto
+                    open_price = deal.price # Valor por defecto
+
+                    # Buscamos la transacción de entrada (IN) para esta misma posición
+                    entry_deals = mt5.history_deals_get(position=deal.position_id)
+                    if entry_deals:
+                        for d_entry in entry_deals:
+                            if d_entry.entry == 0: # 0 es IN (Apertura)
+                                open_time = datetime.fromtimestamp(d_entry.time)
+                                open_price = d_entry.price
+                                break
+
                     query = """
-                        INSERT IGNORE INTO trades 
+                        INSERT INTO trades 
                         (ticket, symbol, type, lotage, open_price, open_time, close_price, profit, close_time, magic_number)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
                     values = (
-                        pos.ticket,
-                        pos.symbol,
+                        deal.ticket,
+                        deal.symbol,
                         trade_type,
-                        pos.volume,
-                        pos.price_open,
-                        datetime.fromtimestamp(pos.time),      # open_time de la posición
-                        pos.price_close,
-                        pos.profit,
-                        datetime.fromtimestamp(pos.time_update), # close_time (actualización final)
-                        pos.magic
+                        deal.volume,
+                        open_price,
+                        open_time,
+                        deal.price,
+                        deal.profit + deal.commission + deal.swap, # Profit Neto Real
+                        close_time,
+                        deal.magic
                     )
                     cursor.execute(query, values)
                     procesados += 1
@@ -92,6 +110,6 @@ class DatabaseManager:
             cursor.close()
             conn.close()
             if procesados > 0:
-                print(f"✅ Sincronizados {procesados} trades con MySQL desde posiciones.")
+                print(f"✅ Sincronización Masiva: {procesados} trades nuevos guardados.")
         except Exception as e:
-            print(f"❌ Error Crítico DB Posiciones: {e}")
+            print(f"❌ Error en Sincronización Masiva: {e}")
