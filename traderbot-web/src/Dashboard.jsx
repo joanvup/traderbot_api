@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from './api/axios';
-import { 
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { 
-    TrendingUp, TrendingDown, DollarSign, Activity, LogOut, RefreshCw, 
-    Clock, Cpu, Zap, ShieldCheck, FileText, Table as TableIcon, 
-    ChevronLeft, ChevronRight 
+import {
+    TrendingUp, TrendingDown, DollarSign, Activity, LogOut, RefreshCw,
+    Clock, Cpu, Zap, ShieldCheck, FileText, Table as TableIcon,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -17,7 +17,7 @@ const Dashboard = ({ onLogout }) => {
     const [history, setHistory] = useState([]);
     const [trades, setTrades] = useState([]);
     const [monitoring, setMonitoring] = useState([]);
-    
+
     // Estados de UI y Paginación
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -114,7 +114,7 @@ const Dashboard = ({ onLogout }) => {
             <nav className="bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
                 <div className="flex items-center gap-4">
                     <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-2xl shadow-lg shadow-blue-500/20">
-                        <Cpu size={22} className="text-white animate-pulse"/>
+                        <Cpu size={22} className="text-white animate-pulse" />
                     </div>
                     <div>
                         <h1 className="font-black text-lg tracking-tight uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
@@ -126,31 +126,31 @@ const Dashboard = ({ onLogout }) => {
                         </div>
                     </div>
                 </div>
-                
+
                 <div className="flex gap-2">
                     <button onClick={() => fetchData(true)} className={`p-2.5 rounded-xl bg-white/5 border border-white/10 transition-all ${refreshing ? 'text-blue-400' : 'text-slate-400'}`}>
                         <RefreshCw size={20} className={refreshing ? "animate-spin" : ""} />
                     </button>
                     <button onClick={onLogout} className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all">
-                        <LogOut size={20}/>
+                        <LogOut size={20} />
                     </button>
                 </div>
             </nav>
 
             <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-                
+
                 {/* TARJETAS KPI */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KPI icon={<DollarSign/>} label="Balance Real" val={`$${summary.current_balance.toLocaleString()}`} color="blue" />
-                    <KPI icon={<TrendingUp/>} label="Net Profit" val={`$${summary.total_profit.toLocaleString()}`} color="emerald" />
-                    <KPI icon={<Zap/>} label="Win Rate" val={`${summary.win_rate}%`} color="violet" />
-                    <KPI icon={<Activity/>} label="Total Trades" val={summary.total_trades} color="amber" />
+                    <KPI icon={<DollarSign />} label="Balance Real" val={`$${summary?.current_balance?.toLocaleString() || '0.00'}`} color="blue" />
+                    <KPI icon={<TrendingUp />} label="Net Profit" val={`$${summary?.total_profit?.toLocaleString() || '0.00'}`} color="emerald" />
+                    <KPI icon={<Zap />} label="Win Rate" val={`${summary?.win_rate}%`} color="violet" />
+                    <KPI icon={<Activity />} label="Total Trades" val={summary?.total_trades} color="amber" />
                 </div>
 
                 {/* VIGILANCIA DE MERCADO (IA MONITORING) */}
                 <section>
                     <div className="flex items-center gap-2 mb-4 px-1">
-                        <ShieldCheck className="text-blue-500" size={20}/>
+                        <ShieldCheck className="text-blue-500" size={20} />
                         <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">AI Surveillance Unit</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -171,8 +171,8 @@ const Dashboard = ({ onLogout }) => {
                             <AreaChart data={history}>
                                 <defs>
                                     <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
+                                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="0" vertical={false} stroke="rgba(255,255,255,0.03)" />
@@ -191,10 +191,10 @@ const Dashboard = ({ onLogout }) => {
                         <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">Live Execution Log</h3>
                         <div className="flex gap-2">
                             <button onClick={exportCSV} className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white transition-all border border-white/5" title="Exportar CSV">
-                                <TableIcon size={18}/>
+                                <TableIcon size={18} />
                             </button>
                             <button onClick={exportPDF} className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white transition-all border border-white/5" title="Generar Reporte PDF">
-                                <FileText size={18}/>
+                                <FileText size={18} />
                             </button>
                         </div>
                     </div>
@@ -204,13 +204,13 @@ const Dashboard = ({ onLogout }) => {
                             <div key={t.id} className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-all">
                                 <div className="flex items-center gap-4">
                                     <div className={`p-3 rounded-2xl ${t.profit > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                        {t.profit > 0 ? <TrendingUp size={18}/> : <TrendingDown size={18}/>}
+                                        {t.profit > 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
                                     </div>
                                     <div>
                                         <div className="font-black text-sm">{t.symbol} <span className="ml-2 text-[10px] text-slate-500">#{t.ticket}</span></div>
                                         <div className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">
-                                            <span className={t.type === 'BUY' ? 'text-blue-400' : 'text-orange-400'}>{t.type}</span> • 
-                                            <span className="text-slate-500 ml-1">IN: {t.open_time}</span> • 
+                                            <span className={t.type === 'BUY' ? 'text-blue-400' : 'text-orange-400'}>{t.type}</span> •
+                                            <span className="text-slate-500 ml-1">IN: {t.open_time}</span> •
                                             <span className="text-slate-500 ml-1">OUT: {t.close_time}</span>
                                         </div>
                                     </div>
@@ -232,22 +232,22 @@ const Dashboard = ({ onLogout }) => {
                     {/* CONTROLES DE PAGINACIÓN */}
                     {totalPages > 1 && (
                         <div className="p-4 border-t border-white/5 flex justify-center items-center gap-6 bg-white/[0.01]">
-                            <button 
-                                onClick={handlePrevPage} 
+                            <button
+                                onClick={handlePrevPage}
                                 disabled={currentPage === 1}
                                 className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-blue-400 disabled:opacity-20 disabled:pointer-events-none transition-all"
                             >
-                                <ChevronLeft size={24}/>
+                                <ChevronLeft size={24} />
                             </button>
                             <span className="text-xs font-black text-slate-500 uppercase">
                                 Página <span className="text-blue-500">{currentPage}</span> de {totalPages}
                             </span>
-                            <button 
-                                onClick={handleNextPage} 
+                            <button
+                                onClick={handleNextPage}
                                 disabled={currentPage === totalPages}
                                 className="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-blue-400 disabled:opacity-20 disabled:pointer-events-none transition-all"
                             >
-                                <ChevronRight size={24}/>
+                                <ChevronRight size={24} />
                             </button>
                         </div>
                     )}
@@ -286,7 +286,7 @@ const MarketCard = ({ data }) => {
                     {data.status}
                 </div>
             </div>
-            
+
             <div className="space-y-3">
                 <div className="flex justify-between items-end">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">AI Reliability</span>
@@ -295,8 +295,8 @@ const MarketCard = ({ data }) => {
                     </span>
                 </div>
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div 
-                        className={`h-full transition-all duration-1000 ${isBullish ? 'bg-emerald-500' : 'bg-red-500'}`} 
+                    <div
+                        className={`h-full transition-all duration-1000 ${isBullish ? 'bg-emerald-500' : 'bg-red-500'}`}
                         style={{ width: `${data.ia_prob * 100}%` }}
                     ></div>
                 </div>

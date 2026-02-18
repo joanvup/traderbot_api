@@ -110,39 +110,45 @@ async def get_summary(token: str = Depends(oauth2_scheme)):
 @app.get("/stats/trades")
 async def get_paginated_trades(page: int = 1, limit: int = 10, token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    offset = (page - 1) * limit
-    
-    # Query para obtener trades paginados incluyendo open_time
-    query = text("""
-        SELECT 
-            id, ticket, symbol, type, lotage, open_price, open_time, close_price, profit, close_time, magic_number
-        FROM trades 
-        ORDER BY close_time DESC 
-        LIMIT :limit OFFSET :offset
-    """)
-    res = db.execute(query, {"limit": limit, "offset": offset}).fetchall()
+    try:
+        offset = (page - 1) * limit
+        
+        # Agregamos un try-except interno para capturar el error exacto de SQL
+        query = text("""
+            SELECT 
+                id, ticket, symbol, type, lotage, open_price, open_time, close_price, profit, close_time, magic_number
+            FROM trades 
+            ORDER BY close_time DESC 
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        res = db.execute(query, {"limit": limit, "offset": offset}).fetchall()
 
-    # Query para obtener el conteo total para la paginación
-    total_count_query = text("SELECT COUNT(*) FROM trades")
-    total_trades = db.execute(total_count_query).scalar()
-    db.close()
+        total_trades = db.execute(text("SELECT COUNT(*) FROM trades")).scalar()
+        
+        trades_data = []
+        for r in res:
+            trades_data.append({
+                "id": r[0], 
+                "ticket": r[1],
+                "symbol": r[2], 
+                "type": r[3],
+                "lotage": float(r[4]),
+                "open_price": float(r[5]),
+                # Verificación de seguridad para fechas nulas
+                "open_time": r[6].strftime("%Y-%m-%d %H:%M:%S") if r[6] else "N/A", 
+                "close_price": float(r[7]),
+                "profit": float(r[8]), 
+                "close_time": r[9].strftime("%Y-%m-%d %H:%M:%S") if r[9] else "N/A",
+                "magic_number": r[10]
+            })
+        return {"trades": trades_data, "total_trades": total_trades, "current_page": page, "page_size": limit}
     
-    trades_data = []
-    for r in res:
-        trades_data.append({
-            "id": r.id, 
-            "ticket": r.ticket,
-            "symbol": r.symbol, 
-            "type": r.type,
-            "lotage": float(r.lotage),
-            "open_price": float(r.open_price),
-            "open_time": r.open_time.strftime("%Y-%m-%d %H:%M:%S"), # Formatear open_time
-            "close_price": float(r.close_price),
-            "profit": float(r.profit), 
-            "close_time": r.close_time.strftime("%Y-%m-%d %H:%M:%S"), # Formatear close_time
-            "magic_number": r.magic_number
-        })
-    return {"trades": trades_data, "total_trades": total_trades, "current_page": page, "page_size": limit}
+    except Exception as e:
+        print(f"ERROR SQL en trades: {str(e)}") # Esto saldrá en journalctl
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+    finally:
+        db.close()
 
 
 @app.get("/stats/history")
