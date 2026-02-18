@@ -1,7 +1,5 @@
 import mysql.connector
-from datetime import datetime, timedelta # Agregamos timedelta aquí
-import MetaTrader5 as mt5
-
+from datetime import datetime, timedelta
 
 class DatabaseManager:
     def __init__(self, host, user, password, database):
@@ -10,14 +8,13 @@ class DatabaseManager:
             'user': user,
             'password': password,
             'database': database,
-            'connect_timeout': 5 # Tiempo de espera para no bloquear el bot
+            'connect_timeout': 10 # Aumentado el timeout para conexiones remotas
         }
 
     def _get_connection(self):
         return mysql.connector.connect(**self.config)
 
     def actualizar_estado_bot(self, is_active, balance, equity):
-        """Actualiza el 'latido' del bot y sus métricas financieras"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -37,52 +34,64 @@ class DatabaseManager:
             print(f"Error DB (Status): {e}")
 
     def sincronizar_trades(self, magic_number):
+        """
+        Sincroniza trades buscando en el historial de POSICIONES CERRADAS de MT5.
+        Esto es más preciso para obtener open_time y open_price.
+        """
         import MetaTrader5 as mt5
-        from datetime import datetime, timedelta
         
-        # 30 días de historial
-        from_date = datetime.now() - timedelta(days=30)
-        history_deals = mt5.history_deals_get(from_date, datetime.now(), group=f"*{magic_number}*")
+        # Buscamos historial desde el inicio del 2020 para capturar todo
+        from_date = datetime(2020, 1, 1) 
+        to_date = datetime.now()
         
-        if history_deals:
-            try:
-                conn = self._get_connection()
-                cursor = conn.cursor()
-                for deal in history_deals:
-                    # FILTRO: Solo trades reales (no depósitos) y que sean cierres (entry out=1)
-                    if deal.symbol != "" and deal.entry == 1:
-                        query = """
-                            INSERT IGNORE INTO trades 
-                            (ticket, symbol, type, lotage, open_price, close_price, profit, close_time, magic_number)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """
-                        t_type = "BUY" if deal.type == 1 else "SELL"
-                        c_time = datetime.fromtimestamp(deal.time)
-                        # En MT5, el beneficio real ya incluye swaps y comisiones
-                        cursor.execute(query, (
-                            deal.ticket, deal.symbol, t_type, deal.volume,
-                            deal.price - (deal.profit/deal.volume/10) if deal.volume > 0 else 0,
-                            deal.price, deal.profit, c_time, magic_number
-                        ))
-                conn.commit()
-                cursor.close()
-                conn.close()
-            except Exception as e:
-                print(f"Error DB: {e}")
+        # Obtenemos TODAS las posiciones cerradas del historial de la cuenta
+        closed_positions = mt5.history_positions_get(from_date, to_date)
 
-    def actualizar_monitoreo(self, symbol, price, rsi, ia_prob, status):
+        if closed_positions is None:
+            print(f"Error MT5: No se pudo obtener historial de posiciones. {mt5.last_error()}")
+            return
+
+        procesados = 0
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            query = """
-                INSERT INTO market_monitoring (symbol, price, rsi, ia_prob, status)
-                VALUES (%s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE 
-                price=%s, rsi=%s, ia_prob=%s, status=%s
-            """
-            cursor.execute(query, (symbol, price, rsi, ia_prob, status, price, rsi, ia_prob, status))
+            
+            for pos in closed_positions:
+                # Solo procesamos posiciones cerradas que tengan un profit != 0 y sean de nuestro bot
+                if pos.profit != 0 and pos.magic == magic_number: 
+                    # Verificar si ya existe este ticket en la DB para evitar duplicados
+                    cursor.execute(f"SELECT COUNT(*) FROM trades WHERE ticket = {pos.ticket}")
+                    if cursor.fetchone()[0] > 0:
+                        continue # Ya existe, saltar
+
+                    # Determinar el tipo de operación (Buy/Sell)
+                    trade_type = "BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL"
+                    
+                    query = """
+                        INSERT IGNORE INTO trades 
+                        (ticket, symbol, type, lotage, open_price, open_time, close_price, profit, close_time, magic_number)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    values = (
+                        pos.ticket,
+                        pos.symbol,
+                        trade_type,
+                        pos.volume,
+                        pos.price_open,
+                        datetime.fromtimestamp(pos.time),      # open_time de la posición
+                        pos.price_close,
+                        pos.profit,
+                        datetime.fromtimestamp(pos.time_update), # close_time (actualización final)
+                        pos.magic
+                    )
+                    cursor.execute(query, values)
+                    procesados += 1
+            
             conn.commit()
             cursor.close()
             conn.close()
+            if procesados > 0:
+                print(f"✅ Sincronizados {procesados} trades con MySQL desde posiciones.")
         except Exception as e:
-            print(f"Error DB (Monitoreo): {e}")
+            print(f"❌ Error Crítico DB Posiciones: {e}")

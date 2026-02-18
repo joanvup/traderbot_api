@@ -108,50 +108,75 @@ async def get_summary(token: str = Depends(oauth2_scheme)):
 # Añadir al final de main.py (dentro de las rutas protegidas)
 
 @app.get("/stats/trades")
-async def get_recent_trades(token: str = Depends(oauth2_scheme)):
+async def get_paginated_trades(page: int = 1, limit: int = 10, token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    query = text("SELECT * FROM trades ORDER BY close_time DESC LIMIT 10")
-    res = db.execute(query).fetchall()
+    offset = (page - 1) * limit
+    
+    # Query para obtener trades paginados incluyendo open_time
+    query = text("""
+        SELECT 
+            id, ticket, symbol, type, lotage, open_price, open_time, close_price, profit, close_time, magic_number
+        FROM trades 
+        ORDER BY close_time DESC 
+        LIMIT :limit OFFSET :offset
+    """)
+    res = db.execute(query, {"limit": limit, "offset": offset}).fetchall()
+
+    # Query para obtener el conteo total para la paginación
+    total_count_query = text("SELECT COUNT(*) FROM trades")
+    total_trades = db.execute(total_count_query).scalar()
     db.close()
     
-    # Convertir resultados a lista de diccionarios
-    trades = []
+    trades_data = []
     for r in res:
-        trades.append({
-            "id": r.id, "symbol": r.symbol, "type": r.type,
-            "profit": float(r.profit), "close_time": r.close_time.strftime("%Y-%m-%d %H:%M")
+        trades_data.append({
+            "id": r.id, 
+            "ticket": r.ticket,
+            "symbol": r.symbol, 
+            "type": r.type,
+            "lotage": float(r.lotage),
+            "open_price": float(r.open_price),
+            "open_time": r.open_time.strftime("%Y-%m-%d %H:%M:%S"), # Formatear open_time
+            "close_price": float(r.close_price),
+            "profit": float(r.profit), 
+            "close_time": r.close_time.strftime("%Y-%m-%d %H:%M:%S"), # Formatear close_time
+            "magic_number": r.magic_number
         })
-    return trades
+    return {"trades": trades_data, "total_trades": total_trades, "current_page": page, "page_size": limit}
+
 
 @app.get("/stats/history")
 async def get_history(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
-    # Obtenemos trades cerrados
+    # Obtenemos todos los trades cerrados para un balance acumulado real
     query = text("SELECT close_time, profit FROM trades ORDER BY close_time ASC")
     res = db.execute(query).fetchall()
     db.close()
     
     history = []
-    # Primer punto: Balance inicial antes del primer trade
-    balance_acumulado = 100000.0 
     
-    # Si no hay trades, mostramos una línea recta con el balance actual
-    if not res:
-        # Intentamos obtener el balance actual del bot_status
-        db = SessionLocal()
-        status = db.execute(text("SELECT balance FROM bot_status WHERE id=1")).fetchone()
-        db.close()
-        current_b = float(status[0]) if status else 100000.0
-        return [{"time": "Inicio", "balance": 100000.0}, {"time": "Actual", "balance": current_b}]
+    # Balance inicial de la cuenta
+    initial_balance = 100000.0 
+    balance_acumulado = initial_balance
+    
+    # Añadir un punto de inicio a la gráfica
+    history.append({"time": "Inicio", "balance": initial_balance})
 
-    # Si hay trades, construimos la curva
-    history.append({"time": "Inicio", "balance": 100000.0})
     for r in res:
         balance_acumulado += float(r.profit)
         history.append({
             "time": r.close_time.strftime("%d/%m %H:%M"),
             "balance": round(balance_acumulado, 2)
         })
+    
+    # Si no hay trades cerrados, la gráfica mostrará el balance inicial actual
+    if len(history) == 1: # Solo el punto de inicio
+        db = SessionLocal()
+        status_res = db.execute(text("SELECT balance FROM bot_status WHERE id=1")).fetchone()
+        db.close()
+        current_balance = float(status_res[0]) if status_res else initial_balance
+        history.append({"time": datetime.now().strftime("%d/%m %H:%M"), "balance": current_balance})
+        
     return history
     
 @app.get("/stats/monitoring")
