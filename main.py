@@ -203,5 +203,18 @@ async def export_trades_csv(token: str = Depends(oauth2_scheme)):
         headers={"Content-Disposition": "attachment; filename=traderbot_report.csv"}
     )
 
+@app.get("/stats/active-trades")
+async def get_active_trades(token: str = Depends(oauth2_scheme)):
+    db = SessionLocal()
+    res = db.execute(text("SELECT * FROM live_positions ORDER BY time_open DESC")).fetchall()
+    db.close()
+    
+    return [{
+        "ticket": r.ticket, "symbol": r.symbol, "type": r.type, "lotage": float(r.lotage),
+        "price_open": float(r.price_open), "price_current": float(r.price_current),
+        "sl": float(r.sl), "tp": float(r.tp), "profit": float(r.profit),
+        "time_open": r.time_open.strftime("%H:%M:%S")
+    } for r in res]
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

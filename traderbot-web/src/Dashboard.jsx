@@ -17,6 +17,7 @@ const Dashboard = ({ onLogout }) => {
     const [history, setHistory] = useState([]);
     const [trades, setTrades] = useState([]);
     const [monitoring, setMonitoring] = useState([]);
+    const [activeTrades, setActiveTrades] = useState([]);
 
     // Estados de UI y Paginación
     const [loading, setLoading] = useState(true);
@@ -37,7 +38,8 @@ const Dashboard = ({ onLogout }) => {
                 api.get(`/stats/trades?page=${currentPage}&limit=${tradesPerPage}`),
                 api.get('/stats/monitoring')
             ]);
-
+            const resActive = await api.get('/stats/active-trades');
+            setActiveTrades(resActive.data);
             setSummary(resSum.data);
             setHistory(resHis.data);
             setTrades(resTra.data.trades);
@@ -184,7 +186,54 @@ const Dashboard = ({ onLogout }) => {
                         </ResponsiveContainer>
                     </div>
                 </div>
+                <section>
+                    <div className="flex items-center gap-2 mb-4 px-1">
+                        <Activity className="text-emerald-500" size={20} />
+                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Active Terminal (Floating)</h2>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                        {activeTrades.length > 0 ? activeTrades.map(t => (
+                            <div key={t.ticket} className="bg-[#0f172a] border-l-4 border-emerald-500 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-3 rounded-xl ${t.profit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        <Zap size={20} />
+                                    </div>
+                                    <div>
+                                        <div className="font-black text-lg">{t.symbol} <span className="text-[10px] text-slate-600">#{t.ticket}</span></div>
+                                        <div className="text-[10px] font-bold uppercase text-slate-500">
+                                            <span className={t.type === 'BUY' ? 'text-blue-400' : 'text-orange-400'}>{t.type}</span> • Lote: {t.lotage} • In: {t.time_open}
+                                        </div>
+                                    </div>
+                                </div>
 
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-6">
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-500 uppercase">Entry Price</p>
+                                        <p className="font-mono text-sm font-bold text-slate-300">{t.price_open.toFixed(5)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-500 uppercase">Current</p>
+                                        <p className="font-mono text-sm font-bold text-blue-400 animate-pulse">{t.price_current.toFixed(5)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-black text-slate-500 uppercase italic">Stop Loss / TP</p>
+                                        <p className="font-mono text-[10px] font-bold text-red-900">{t.sl.toFixed(5)} / <span className="text-emerald-900">{t.tp.toFixed(5)}</span></p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-black text-slate-500 uppercase text-right">Live Profit</p>
+                                        <p className={`text-xl font-black ${t.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="bg-[#0f172a]/30 border border-dashed border-white/5 p-10 rounded-3xl text-center text-slate-600 uppercase text-xs font-bold tracking-widest">
+                                No active positions in the market
+                            </div>
+                        )}
+                    </div>
+                </section>
                 {/* DIARIO DE EJECUCIÓN (TABLA CON PAGINACIÓN) */}
                 <div className="bg-[#0f172a] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl mb-12">
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">

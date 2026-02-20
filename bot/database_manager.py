@@ -107,3 +107,33 @@ class DatabaseManager:
                 print(f"✅ Sincronización Exitosa: {procesados} registros nuevos (incluyendo balance).")
         except Exception as e:
             print(f"❌ Error en Sincronización: {e}")
+    
+    def actualizar_posiciones_vivas(self, posiciones_mt5):
+        """Sincroniza las posiciones abiertas actualmente en MT5 con MySQL"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # 1. Limpiamos la tabla para tener solo lo que está abierto AHORA
+            cursor.execute("TRUNCATE TABLE live_positions")
+            
+            if posiciones_mt5:
+                query = """
+                    INSERT INTO live_positions 
+                    (ticket, symbol, type, lotage, price_open, price_current, sl, tp, profit, time_open)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                for p in posiciones_mt5:
+                    t_type = "BUY" if p.type == 0 else "SELL"
+                    values = (
+                        p.ticket, p.symbol, t_type, p.volume,
+                        p.price_open, p.price_current, p.sl, p.tp, p.profit,
+                        datetime.fromtimestamp(p.time)
+                    )
+                    cursor.execute(query, values)
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error DB (Live Positions): {e}")
