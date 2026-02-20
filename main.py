@@ -81,6 +81,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.get("/stats/summary")
 async def get_summary(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
+    # Contar posiciones reales en la tabla live_positions
+    count_live = db.execute(text("SELECT COUNT(*) FROM live_positions")).scalar() or 0
     # Solo contamos trades reales (no el depósito) para el Win Rate
     q_trades = text("""
         SELECT 
@@ -107,7 +109,8 @@ async def get_summary(token: str = Depends(oauth2_scheme)):
         "total_trades": total_trades,
         "current_balance": float(status_res[0]) if status_res else 0,
         "current_equity": float(status_res[1]) if status_res else 0,
-        "is_active": status_res[2] if status_res else False
+        "is_active": status_res[2] if status_res else False,
+        "open_positions": count_live, # Usaremos este valor para la tarjeta KPI
     }
 
 @app.get("/stats/trades")

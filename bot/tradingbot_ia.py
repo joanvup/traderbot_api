@@ -222,7 +222,7 @@ if __name__ == "__main__":
             
             acc = mt5.account_info()
             posiciones = mt5.positions_get(magic=MAGIC_NUMBER)
-            db.actualizar_posiciones_vivas(posiciones)
+            db.actualizar_posiciones_vivas(posiciones, MAGIC_NUMBER)
             num_pos = len(posiciones) if posiciones else 0
             dashboard = []
 

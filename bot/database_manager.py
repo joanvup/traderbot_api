@@ -108,14 +108,14 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Error en Sincronización: {e}")
     
-    def actualizar_posiciones_vivas(self, posiciones_mt5):
-        """Sincroniza las posiciones abiertas actualmente en MT5 con MySQL"""
+    def actualizar_posiciones_vivas(self, posiciones_mt5, magic_number):
+        """Sincroniza posiciones filtrando estrictamente por Magic Number"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # 1. Limpiamos la tabla para tener solo lo que está abierto AHORA
-            cursor.execute("TRUNCATE TABLE live_positions")
+            # 1. Limpiar la tabla COMPLETAMENTE antes de insertar lo nuevo
+            cursor.execute("DELETE FROM live_positions")
             
             if posiciones_mt5:
                 query = """
@@ -124,16 +124,18 @@ class DatabaseManager:
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 for p in posiciones_mt5:
-                    t_type = "BUY" if p.type == 0 else "SELL"
-                    values = (
-                        p.ticket, p.symbol, t_type, p.volume,
-                        p.price_open, p.price_current, p.sl, p.tp, p.profit,
-                        datetime.fromtimestamp(p.time)
-                    )
-                    cursor.execute(query, values)
+                    # FILTRO CRÍTICO: Solo lo que pertenece a este bot
+                    if p.magic == magic_number:
+                        t_type = "BUY" if p.type == 0 else "SELL"
+                        values = (
+                            p.ticket, p.symbol, t_type, p.volume,
+                            p.price_open, p.price_current, p.sl, p.tp, p.profit,
+                            datetime.fromtimestamp(p.time)
+                        )
+                        cursor.execute(query, values)
             
             conn.commit()
             cursor.close()
             conn.close()
         except Exception as e:
-            print(f"Error DB (Live Positions): {e}")
+            print(f"Error DB (Live Positions Fix): {e}")

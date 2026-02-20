@@ -186,52 +186,77 @@ const Dashboard = ({ onLogout }) => {
                         </ResponsiveContainer>
                     </div>
                 </div>
-                <section>
-                    <div className="flex items-center gap-2 mb-4 px-1">
-                        <Activity className="text-emerald-500" size={20} />
-                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Active Terminal (Floating)</h2>
+                {/* SECCIÓN DE POSICIONES ACTIVAS (TELEMETRÍA TOTAL) */}
+                <section className="space-y-4">
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                            <Activity className="text-blue-500" size={20} />
+                            <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Live Terminal</h2>
+                        </div>
+                        <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-[10px] font-black">
+                            {activeTrades.length} POSICIONES ABIERTAS
+                        </span>
                     </div>
-                    <div className="grid grid-cols-1 gap-4">
-                        {activeTrades.length > 0 ? activeTrades.map(t => (
-                            <div key={t.ticket} className="bg-[#0f172a] border-l-4 border-emerald-500 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-xl ${t.profit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                        <Zap size={20} />
-                                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {activeTrades.map(t => (
+                            <div key={t.ticket} className="bg-[#0f172a] border border-white/5 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden group">
+                                {/* Indicador lateral de tipo */}
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${t.type === 'BUY' ? 'bg-blue-500' : 'bg-orange-500'}`}></div>
+
+                                <div className="flex justify-between items-start mb-6">
                                     <div>
-                                        <div className="font-black text-lg">{t.symbol} <span className="text-[10px] text-slate-600">#{t.ticket}</span></div>
-                                        <div className="text-[10px] font-bold uppercase text-slate-500">
-                                            <span className={t.type === 'BUY' ? 'text-blue-400' : 'text-orange-400'}>{t.type}</span> • Lote: {t.lotage} • In: {t.time_open}
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-black text-xl tracking-tighter">{t.symbol}</span>
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${t.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                                {t.type}
+                                            </span>
                                         </div>
+                                        <p className="text-[10px] font-mono text-slate-500 mt-1">Ticket: #{t.ticket} • Lot: {t.lotage}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`text-2xl font-black font-mono ${t.profit >= 0 ? 'text-emerald-400' : 'text-red-500'}`}>
+                                            {t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}
+                                        </p>
+                                        <p className="text-[9px] font-black text-slate-600 uppercase">Profit USD</p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-6">
-                                    <div>
-                                        <p className="text-[9px] font-black text-slate-500 uppercase">Entry Price</p>
-                                        <p className="font-mono text-sm font-bold text-slate-300">{t.price_open.toFixed(5)}</p>
+                                <div className="grid grid-cols-2 gap-y-4 gap-x-2">
+                                    {/* Entry Price */}
+                                    <div className="bg-white/[0.02] p-3 rounded-2xl border border-white/5">
+                                        <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Entry Price</p>
+                                        <p className="font-mono text-xs font-bold text-slate-300">{t.price_open.toFixed(5)}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-[9px] font-black text-slate-500 uppercase">Current</p>
-                                        <p className="font-mono text-sm font-bold text-blue-400 animate-pulse">{t.price_current.toFixed(5)}</p>
+
+                                    {/* Current Price */}
+                                    <div className="bg-blue-500/5 p-3 rounded-2xl border border-blue-500/10">
+                                        <p className="text-[9px] font-black text-blue-500 uppercase mb-1">Current Price</p>
+                                        <p className="font-mono text-xs font-bold text-blue-400 animate-pulse">{t.price_current.toFixed(5)}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-[9px] font-black text-slate-500 uppercase italic">Stop Loss / TP</p>
-                                        <p className="font-mono text-[10px] font-bold text-red-900">{t.sl.toFixed(5)} / <span className="text-emerald-900">{t.tp.toFixed(5)}</span></p>
+
+                                    {/* Stop Loss */}
+                                    <div className="bg-red-500/5 p-3 rounded-2xl border border-red-500/10 text-center">
+                                        <p className="text-[9px] font-black text-red-700 uppercase mb-1 italic">Stop Loss</p>
+                                        <p className="font-mono text-xs font-bold text-red-900">{t.sl.toFixed(5)}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-[9px] font-black text-slate-500 uppercase text-right">Live Profit</p>
-                                        <p className={`text-xl font-black ${t.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                            {t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}
-                                        </p>
+
+                                    {/* Take Profit */}
+                                    <div className="bg-emerald-500/5 p-3 rounded-2xl border border-emerald-500/10 text-center">
+                                        <p className="text-[9px] font-black text-emerald-700 uppercase mb-1 italic">Take Profit</p>
+                                        <p className="font-mono text-xs font-bold text-emerald-900">{t.tp.toFixed(5)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 flex justify-between items-center text-[9px] font-bold text-slate-600 uppercase">
+                                    <span>In: {t.time_open}</span>
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
+                                        Live Telemetry
                                     </div>
                                 </div>
                             </div>
-                        )) : (
-                            <div className="bg-[#0f172a]/30 border border-dashed border-white/5 p-10 rounded-3xl text-center text-slate-600 uppercase text-xs font-bold tracking-widest">
-                                No active positions in the market
-                            </div>
-                        )}
+                        ))}
                     </div>
                 </section>
                 {/* DIARIO DE EJECUCIÓN (TABLA CON PAGINACIÓN) */}
