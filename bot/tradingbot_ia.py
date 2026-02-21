@@ -116,10 +116,40 @@ def abrir_orden(tipo, symbol, atr):
     agregar_log(f"🚀 {tipo} {symbol}")
 
 if __name__ == "__main__":
-    mt5.initialize()
+    # 1. Inicialización con reintentos
+    if not mt5.initialize():
+        print("Fallo al iniciar MT5"); quit()
+    
+    # 2. Verificación de cuenta
+    account_info = mt5.account_info()
+    if account_info is None:
+        print("❌ ERROR: No se detectó cuenta de Libertex conectada. Abre MT5 y loguéate."); quit()
+    else:
+        print(f"✅ Conectado a Libertex - Cuenta: {account_info.login}")
+
     print("Auditoría de datos..."); db.sincronizar_trades(MAGIC_NUMBER)
     
-    activos = [s.name for s in mt5.symbols_get() if s.visible and any(x in s.name for x in ["USD","BTC","XAU","NAS"])][:MAX_ACTIVOS]
+    # 3. Obtención de activos con manejo de errores (Libertex Fix)
+    print("Obteniendo lista de activos...")
+    todos_los_simbolos = mt5.symbols_get()
+    
+    if todos_los_simbolos is None:
+        print("❌ Error: No se recibieron símbolos. Reintenta en 5 segundos...")
+        time.sleep(5)
+        todos_los_simbolos = mt5.symbols_get()
+
+    if todos_los_simbolos is not None:
+        # Libertex usa nombres como EURUSD o EURUSD_ (con guión). 
+        # Buscamos coincidencias parciales.
+        keywords = ["USD", "BTC", "XAU", "NAS", "GOLD", "ETH"]
+        activos = [s.name for s in todos_los_simbolos if s.visible and any(k in s.name.upper() for k in keywords)]
+        activos = activos[:MAX_ACTIVOS]
+        print(f"👍 Activos encontrados en Libertex: {activos}")
+    else:
+        print("❌ No se pudieron cargar activos. Asegúrate de dar clic derecho en Market Watch -> 'Show All'")
+        quit()
+
+    # 4. Entrenamiento (Igual que antes)
     with ProcessPoolExecutor() as ex:
         for sym, mod in ex.map(tarea_entrenamiento, activos):
             if mod: MODELOS_IA[sym] = mod
